@@ -6,7 +6,7 @@ from django.db import (models, router, transaction)
 from django.db.models import signals, sql
 from django.contrib.admin.utils import NestedObjects
 from django.db.models.fields import FieldDoesNotExist
-from django.utils import six
+from django.utils import six, timezone
 from operator import attrgetter
 
 
@@ -103,7 +103,7 @@ class SoftDeleteHelper():
             try:
                 if self.delete_type == 'soft_delete':
                     self.sql_model_wise_batch_update(model, instances,
-                                                     deleted_at=uuid.uuid4())
+                                                     deleted_at=timezone.now())
                 else:
                     self.sql_model_wise_batch_update(model, instances,
                                                      deleted_at=None)
@@ -126,7 +126,7 @@ class SoftDeleteQuerySet(models.QuerySet):
 
     @transaction.atomic
     def delete(self, using=None):
-        '''setting deleted_at attribtue to new UUID', also soft-deleting all its
+        '''setting deleted_at attribtue to timezone.now()', also soft-deleting all its
         related objects if they are on delete cascade'''
         using = using or "default"
 
