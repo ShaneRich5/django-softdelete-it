@@ -1,5 +1,5 @@
 from __future__ import unicode_literals
-import uuid
+from datetime import datetime
 
 from collections import Counter
 from django.db import (models, router, transaction)
@@ -8,6 +8,7 @@ from django.contrib.admin.utils import NestedObjects
 from django.db.models.fields import FieldDoesNotExist
 from django.utils import six
 from operator import attrgetter
+
 
 
 class SoftDeleteHelper():
@@ -32,11 +33,11 @@ class SoftDeleteHelper():
         soft-deleted'''
         for model, instances in collector.data.items():
             try:
-                if model._meta.get_field("deleted"):
-                    collector.data[model] = set(filter(lambda x: not x.deleted,
+                if model._meta.get_field("deleted_at"):
+                    collector.data[model] = set(filter(lambda x: not x.deleted_at,
                                                 instances))
             except FieldDoesNotExist:
-                # if deleted field does not exist in model, do nothing
+                # if deleted_at field does not exist in model, do nothing
                 pass
         return collector
 
@@ -50,10 +51,10 @@ class SoftDeleteHelper():
             collector.data[model] = sorted(instances, key=attrgetter("pk"))
         collector.sort()
 
-    def sql_model_wise_batch_update(self, model, instances, deleted=None):
+    def sql_model_wise_batch_update(self, model, instances, deleted_at=None):
         query = sql.UpdateQuery(model)
         query.update_batch([obj.pk for obj in instances],
-                           {'deleted': deleted}, self.using)
+                           {'deleted_at': deleted_at}, self.using)
 
     def sql_hard_delete(self, model, instances):
         query = sql.DeleteQuery(model)
@@ -89,7 +90,7 @@ class SoftDeleteHelper():
         # sort collected objects
         self.sort_all_objects(collector)
 
-        deleted_counter = Counter()
+        deleted_at_counter = Counter()
         # soft/hard-delete all nested instnaces in batch - model-wise
         if self.delete_type == 'hard_delete':
             return collector.delete()
@@ -102,30 +103,30 @@ class SoftDeleteHelper():
             try:
                 if self.delete_type == 'soft_delete':
                     self.sql_model_wise_batch_update(model, instances,
-                                                     deleted=uuid.uuid4())
+                                                     deleted_at=uuid.uuid4())
                 else:
                     self.sql_model_wise_batch_update(model, instances,
-                                                     deleted=None)
-                deleted_counter[model._meta.model_name] += len(instances)
+                                                     deleted_at=None)
+                deleted_at_counter[model._meta.model_name] += len(instances)
             except FieldDoesNotExist:
                 # hard-delete instnaces of those model that are not made to
                 # soft-delete
                 self.sql_hard_delete(model, instances)
-                deleted_counter[model._meta.model_name] += len(instances)
+                deleted_at_counter[model._meta.model_name] += len(instances)
 
             # send post-delete signals
             if self.delete_type == 'soft_delete':
                 self.send_signal(model, instances, "post_delete")
             else:
                 self.send_signal(model, instances, "post_save")
-        return sum(deleted_counter.values()), dict(deleted_counter)
+        return sum(deleted_at_counter.values()), dict(deleted_at_counter)
 
 
 class SoftDeleteQuerySet(models.QuerySet):
 
     @transaction.atomic
     def delete(self, using=None):
-        '''setting deleted attribtue to new UUID', also soft-deleting all its
+        '''setting deleted_at attribtue to new UUID', also soft-deleting all its
         related objects if they are on delete cascade'''
         using = using or "default"
 
@@ -143,7 +144,7 @@ class SoftDeleteQuerySet(models.QuerySet):
 
     @transaction.atomic
     def undelete(self, using=None):
-        '''setting deleted attribtue to True', also soft-deleting all its
+        '''setting deleted_at attribtue to True', also soft-deleting all its
         related objects if they are on delete cascade'''
         using = using or "default"
 
@@ -178,7 +179,7 @@ class SoftDeleteQuerySet(models.QuerySet):
 
     def only_deleted(self):
         if self.deleted_also:
-            return self.exclude(deleted=None)
+            return self.exclude(deleted_at=None)
         raise ValueError('only_deleted can only be called with all_objects')
 
 
@@ -190,14 +191,14 @@ class SoftDeleteManager(models.Manager):
     def get_queryset(self):
         '''return all unsoft-deleted objects if deleted_also is False'''
         # return super(SoftDeleteManager, self).get_queryset(
-        #                                         ).filter(deleted=False)
+        #                                         ).filter(deleted_at=None)
         if self.deleted_also:
             return SoftDeleteQuerySet(self.model)
-        return SoftDeleteQuerySet(self.model).filter(deleted=None)
+        return SoftDeleteQuerySet(self.model).filter(deleted_at=None)
 
     def only_deleted(self):
         if self.deleted_also:
-            return self.exclude(deleted=None)
+            return self.exclude(deleted_at=None)
         raise ValueError('only_deleted can only be called with all_objects')
 
 
@@ -205,8 +206,8 @@ class SoftDeleteModel(models.Model):
     '''
     Abstract model that holds:
       1. one attribute:
-        deleted - default is False, when object is soft-deleted it is set to
-        new UUID
+        deleted_at - default is False, when object is soft-deleted it is set to
+        new DateTime
 
       2. objects manager which have following methods:
         delete() - to soft delete instance
@@ -219,9 +220,9 @@ class SoftDeleteModel(models.Model):
 
 
     It override default method delete(), that soft-deletes the object by
-    setting deleted to new UUID.
+    setting deleted_at to new DateTime.
     '''
-    deleted = models.UUIDField(default=None, null=True, blank=True)
+    deleted_at = models.DateTimeField(default=None, null=True, blank=True)
 
     objects = SoftDeleteManager()
     all_objects = SoftDeleteManager(deleted_also=True)
@@ -229,7 +230,7 @@ class SoftDeleteModel(models.Model):
     @transaction.atomic
     def delete(self, using=None):
         '''
-        Setting deleted attribtue to new UUID',
+        Setting deleted_at attribtue to new DateTime',
         also if related objects are on delete cascade:
           they will be soft deleted if those related objects have soft deletion
           capability
