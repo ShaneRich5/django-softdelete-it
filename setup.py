@@ -8,15 +8,15 @@ with open(os.path.join(os.path.dirname(__file__), 'README.rst')) as readme:
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
-    name='django-softdelete-it',
-    version='0.1',
+    name='softdelete',
+    version='0.2.0',
     packages=find_packages(),
     include_package_data=True,
     license='MIT License',
     description='A simple Django app to add soft-delete functionality to\
-                 desired models',
+                 desired models using datetimes',
     long_description=README,
-    url='https://github.com/exploreshaifali/django-softdelete-it',
+    url='https://github.com/ShaneRich5/django-softdelete-it',
     author='Shaifali Agrawal',
     author_email='agrawalshaifali09@gmail.com',
     classifiers=[
@@ -27,6 +27,6 @@ setup(
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
 )
