@@ -2,7 +2,7 @@ from __future__ import unicode_literals
 from datetime import datetime
 
 from collections import Counter
-from django.db import (models, router, transaction)
+from django.db import (models, router, transaction, DEFAULT_DB_ALIAS)
 from django.db.models import signals, sql
 from django.contrib.admin.utils import NestedObjects
 from django.db.models.fields import FieldDoesNotExist
@@ -126,7 +126,7 @@ class SoftDeleteQuerySet(models.QuerySet):
     def delete(self, using=None):
         '''setting deleted_at attribtue to timezone.now()', also soft-deleting all its
         related objects if they are on delete cascade'''
-        using = using or "default"
+        using = using or DEFAULT_DB_ALIAS
 
         with transaction.atomic(using=using):
             assert self.query.can_filter(), \
@@ -144,7 +144,7 @@ class SoftDeleteQuerySet(models.QuerySet):
     def undelete(self, using=None):
         '''setting deleted_at attribtue to True', also soft-deleting all its
         related objects if they are on delete cascade'''
-        using = using or "default"
+        using = using or DEFAULT_DB_ALIAS
 
         with transaction.atomic(using=using):
             assert self.query.can_filter(), \
@@ -161,8 +161,8 @@ class SoftDeleteQuerySet(models.QuerySet):
             return helper.do_work(self)
 
     def hard_delete(self, using=None):
+        using = using or DEFAULT_DB_ALIAS
         with transaction.atomic(using=using):
-            using = using or "default"
 
             assert self.query.can_filter(), \
                 "Cannot use 'limit' or 'offset' with delete."
@@ -243,16 +243,16 @@ class SoftDeleteModel(models.Model):
     def undelete(self, using=None):
         '''setting deleted attribtue to False of current object and all its
         related objects if they are on delete cascade'''
+        using = using or router.db_for_write(self.__class__, instance=self)
         with transaction.atomic(using=using):
-            using = using or router.db_for_write(self.__class__, instance=self)
             helper = SoftDeleteHelper(using=using, delete_type='soft_undelete')
             return helper.do_work([self])
 
     def hard_delete(self, using=None):
         '''setting deleted attribtue to False of current object and all its
         related objects if they are on delete cascade'''
+        using = using or router.db_for_write(self.__class__, instance=self)
         with transaction.atomic(using=using):
-            using = using or router.db_for_write(self.__class__, instance=self)
             helper = SoftDeleteHelper(using=using, delete_type='hard_delete')
             return helper.do_work([self])
 
