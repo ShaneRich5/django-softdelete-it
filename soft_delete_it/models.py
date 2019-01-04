@@ -76,7 +76,6 @@ class SoftDeleteHelper():
                             sender=model, instance=obj, using=self.using
                     )
 
-    @transaction.atomic
     def do_work(self, objs):
         '''
         Method, call all helper methods to do soft-delete/undelete or
