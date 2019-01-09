@@ -2,7 +2,7 @@ from __future__ import unicode_literals
 from datetime import datetime
 
 from collections import Counter
-from django.db import (models, router, transaction)
+from django.db import (models, router, transaction, DEFAULT_DB_ALIAS)
 from django.db.models import signals, sql
 from django.contrib.admin.utils import NestedObjects
 from django.db.models.fields import FieldDoesNotExist
@@ -76,7 +76,6 @@ class SoftDeleteHelper():
                             sender=model, instance=obj, using=self.using
                     )
 
-    @transaction.atomic
     def do_work(self, objs):
         '''
         Method, call all helper methods to do soft-delete/undelete or
@@ -124,58 +123,58 @@ class SoftDeleteHelper():
 
 class SoftDeleteQuerySet(models.QuerySet):
 
-    @transaction.atomic
     def delete(self, using=None):
         '''setting deleted_at attribtue to timezone.now()', also soft-deleting all its
         related objects if they are on delete cascade'''
-        using = using or "default"
+        using = using or DEFAULT_DB_ALIAS
 
-        assert self.query.can_filter(), \
-            "Cannot use 'limit' or 'offset' with delete."
-        try:
-            if self._fields is not None:
-                raise TypeError("Cannot call delete() after .values() or\
-                 .values_list()")
-        except AttributeError:
-            pass
+        with transaction.atomic(using=using):
+            assert self.query.can_filter(), \
+                "Cannot use 'limit' or 'offset' with delete."
+            try:
+                if self._fields is not None:
+                    raise TypeError("Cannot call delete() after .values() or\
+                    .values_list()")
+            except AttributeError:
+                pass
 
-        helper = SoftDeleteHelper(using=using, delete_type='soft_delete')
-        return helper.do_work(self)
+            helper = SoftDeleteHelper(using=using, delete_type='soft_delete')
+            return helper.do_work(self)
 
-    @transaction.atomic
     def undelete(self, using=None):
         '''setting deleted_at attribtue to True', also soft-deleting all its
         related objects if they are on delete cascade'''
-        using = using or "default"
+        using = using or DEFAULT_DB_ALIAS
 
-        assert self.query.can_filter(), \
-            "Cannot use 'limit' or 'offset' with delete."
+        with transaction.atomic(using=using):
+            assert self.query.can_filter(), \
+                "Cannot use 'limit' or 'offset' with delete."
 
-        try:
-            if self._fields is not None:
-                raise TypeError("Cannot call delete() after .values() or\
-                                .values_list()")
-        except AttributeError:
-            pass
+            try:
+                if self._fields is not None:
+                    raise TypeError("Cannot call delete() after .values() or\
+                                    .values_list()")
+            except AttributeError:
+                pass
 
-        helper = SoftDeleteHelper(using=using, delete_type='soft_undelete')
-        return helper.do_work(self)
+            helper = SoftDeleteHelper(using=using, delete_type='soft_undelete')
+            return helper.do_work(self)
 
-    @transaction.atomic
     def hard_delete(self, using=None):
-        using = using or "default"
+        using = using or DEFAULT_DB_ALIAS
+        with transaction.atomic(using=using):
 
-        assert self.query.can_filter(), \
-            "Cannot use 'limit' or 'offset' with delete."
+            assert self.query.can_filter(), \
+                "Cannot use 'limit' or 'offset' with delete."
 
-        try:
-            if self._fields is not None:
-                raise TypeError("Cannot call delete() after .values() or\
-                                .values_list()")
-        except AttributeError:
-            pass
-        helper = SoftDeleteHelper(using=using, delete_type='hard_delete')
-        helper.do_work(self)
+            try:
+                if self._fields is not None:
+                    raise TypeError("Cannot call delete() after .values() or\
+                                    .values_list()")
+            except AttributeError:
+                pass
+            helper = SoftDeleteHelper(using=using, delete_type='hard_delete')
+            helper.do_work(self)
 
     def only_deleted(self):
         if self.deleted_also:
@@ -227,7 +226,6 @@ class SoftDeleteModel(models.Model):
     objects = SoftDeleteManager()
     all_objects = SoftDeleteManager(deleted_also=True)
 
-    @transaction.atomic
     def delete(self, using=None):
         '''
         Setting deleted_at attribtue to new DateTime',
@@ -238,24 +236,25 @@ class SoftDeleteModel(models.Model):
         '''
         using = using or router.db_for_write(self.__class__, instance=self)
 
-        helper = SoftDeleteHelper(using=using, delete_type='soft_delete')
-        return helper.do_work([self])
+        with transaction.atomic(using=using):
+            helper = SoftDeleteHelper(using=using, delete_type='soft_delete')
+            return helper.do_work([self])
 
-    @transaction.atomic
     def undelete(self, using=None):
         '''setting deleted attribtue to False of current object and all its
         related objects if they are on delete cascade'''
         using = using or router.db_for_write(self.__class__, instance=self)
-        helper = SoftDeleteHelper(using=using, delete_type='soft_undelete')
-        return helper.do_work([self])
+        with transaction.atomic(using=using):
+            helper = SoftDeleteHelper(using=using, delete_type='soft_undelete')
+            return helper.do_work([self])
 
-    @transaction.atomic
     def hard_delete(self, using=None):
         '''setting deleted attribtue to False of current object and all its
         related objects if they are on delete cascade'''
         using = using or router.db_for_write(self.__class__, instance=self)
-        helper = SoftDeleteHelper(using=using, delete_type='hard_delete')
-        return helper.do_work([self])
+        with transaction.atomic(using=using):
+            helper = SoftDeleteHelper(using=using, delete_type='hard_delete')
+            return helper.do_work([self])
 
     class Meta:
         abstract = True
